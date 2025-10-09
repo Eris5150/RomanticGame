@@ -1,22 +1,34 @@
 import pygame
 import random
 import math
+import sys, os
 from pygame import mixer
 
-pygame.init()
+# -------- Helpers para rutas (funciona en .py y .exe) --------
+def resource_path(relative_path: str) -> str:
+    """
+    Devuelve una ruta absoluta válida tanto cuando se ejecuta el script
+    normal como cuando está empacado con PyInstaller (usa _MEIPASS).
+    """
+    base_path = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
 
-# Screen
+# Inicialización
+pygame.init()
+mixer.init()  # recomendado antes de cargar sonidos/música
+
+# -------- Pantalla --------
 WIDTH, HEIGHT = 1000, 700
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Memory Invaders")
-icon = pygame.image.load("love-always-wins.png")
+icon = pygame.image.load(resource_path("love-always-wins.png"))
 pygame.display.set_icon(icon)
 
-# Fonts
+# -------- Fuentes --------
 font = pygame.font.SysFont("Arial", 28, bold=True)
 big_font = pygame.font.SysFont("Arial", 44, bold=True)
 
-# Colors
+# -------- Colores --------
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 PINK = (255, 153, 204)
@@ -24,30 +36,41 @@ RED = (255, 102, 102)
 GRAY = (200, 200, 200)
 DARK_GRAY = (50, 50, 50)
 
-# Music
-mixer.music.load('MusicaFondo.mp3')
+# -------- Música --------
+mixer.music.load(resource_path("MusicaFondo.mp3"))
 mixer.music.set_volume(0.3)
 mixer.music.play(-1)
 
-# Images
-player_img = pygame.transform.rotate(pygame.transform.scale(pygame.image.load("love-archery.png"), (64, 64)), 90)
-bullet_img = pygame.transform.scale(pygame.image.load("cupid.png"), (20, 30))
-enemy_img_base = pygame.transform.scale(pygame.image.load("teddy-bear.png"), (64, 64))
-heart_img = pygame.transform.scale(pygame.image.load("heart.png"), (20, 20))
+# -------- Imágenes --------
+player_img = pygame.transform.rotate(
+    pygame.transform.scale(
+        pygame.image.load(resource_path("love-archery.png")), (64, 64)
+    ),
+    90,
+)
+bullet_img = pygame.transform.scale(
+    pygame.image.load(resource_path("cupid.png")), (20, 30)
+)
+enemy_img_base = pygame.transform.scale(
+    pygame.image.load(resource_path("teddy-bear.png")), (64, 64)
+)
+heart_img = pygame.transform.scale(
+    pygame.image.load(resource_path("heart.png")), (20, 20)
+)
 
-# Entities
+# -------- Entidades / Config --------
 player_width, player_height = 64, 64
 bullet_speed = 6
 enemy_speed = 0.8
 enemy_y_base_change = 50
 num_enemies = 20
 
-# Cooldown
+# -------- Balas / Cooldown ----------
 bullets = []
 last_shot_time = 0
-shot_cooldown = 1000  # milliseconds
+shot_cooldown = 0.5  # ms
 
-# Game state
+# -------- Estado de juego --------
 def reset_game():
     global player_x, player_y, bullets, score
     global enemy_x, enemy_y, enemy_x_change, enemy_y_change
@@ -93,6 +116,10 @@ def draw_button(text, x, y, w, h, action=None):
         pygame.time.delay(200)
         action()
 
+# Precargar sonidos como objetos Sound para evitar rutas repetidas
+snd_disparo = mixer.Sound(resource_path("disparo.mp3"))
+snd_golpe = mixer.Sound(resource_path("golpe.mp3"))
+
 def fire_bullet():
     global last_shot_time
     current_time = pygame.time.get_ticks()
@@ -101,7 +128,7 @@ def fire_bullet():
         bullet_y = player_y
         bullets.append([bullet_x, bullet_y])
         last_shot_time = current_time
-        mixer.Sound('disparo.mp3').play()
+        snd_disparo.play()
 
 def spawn_heart_explosion(x, y):
     group = []
@@ -114,7 +141,7 @@ def spawn_heart_explosion(x, y):
 def is_collision(x1, y1, x2, y2, threshold=50):
     return abs(x1 - x2) < threshold and abs(y1 - y2) < threshold
 
-# Loop
+# -------- Bucle principal --------
 clock = pygame.time.Clock()
 running = True
 
@@ -139,7 +166,7 @@ while running:
         player_x = max(0, min(player_x, WIDTH - player_width))
         player_y = max(0, min(player_y, HEIGHT - player_height))
 
-        # Enemies
+        # Enemigos
         for i in range(num_enemies):
             enemy_x[i] += enemy_x_change[i]
             enemy_y[i] += 0.6 + (score * 0.03)
@@ -148,10 +175,10 @@ while running:
                 enemy_x_change[i] *= -1
                 enemy_y[i] += enemy_y_change[i]
 
-            # Collisions with bullets
+            # Colisiones con balas
             for bullet in bullets[:]:
                 if is_collision(enemy_x[i], enemy_y[i], bullet[0], bullet[1]):
-                    mixer.Sound('golpe.mp3').play()
+                    snd_golpe.play()
                     spawn_heart_explosion(enemy_x[i] + 16, enemy_y[i] + 16)
                     bullets.remove(bullet)
                     score += 1
@@ -159,20 +186,20 @@ while running:
                     enemy_y[i] = random.randint(50, 150)
                     break
 
-            # Collision with player or reaching bottom
+            # Colisión con jugador o llegar al fondo
             if is_collision(enemy_x[i], enemy_y[i], player_x, player_y, 55) or enemy_y[i] >= HEIGHT - 60:
                 game_over = True
 
             screen.blit(enemy_img_base, (enemy_x[i], enemy_y[i]))
 
-        # Bullets
+        # Balas
         for bullet in bullets[:]:
             bullet[1] -= bullet_speed
             screen.blit(bullet_img, (bullet[0], bullet[1]))
             if bullet[1] <= 0:
                 bullets.remove(bullet)
 
-        # Explosions
+        # Explosiones
         for group in explosions:
             for p in group:
                 p[0] += p[2]
@@ -195,7 +222,7 @@ while running:
         draw_text("You did it, mi amor 💖", WIDTH // 2, HEIGHT // 2 - 100, size=40, color=PINK, center=True)
         draw_text("I'm in the Friends book", WIDTH // 2, HEIGHT // 2 - 40, size=32, color=BLACK, center=True)
         draw_text("Page 43, Paragraph 2, Word 1", WIDTH // 2, HEIGHT // 2, size=32, color=BLACK, center=True)
-        draw_button("RESTART", WIDTH // 2 - 100, HEIGHT // 2 + 80, 200, 60, action=reset_game)
+        draw_button("RESTART", WIDTH // 2 - 100, WIDTH // 2 + 80, 200, 60, action=reset_game)
 
     pygame.display.update()
     clock.tick(60)
